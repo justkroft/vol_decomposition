@@ -39,6 +39,7 @@ ignore = [
     "ANN002", # Missing type annotation for *args
     "ANN003", # Missing type annotation for **kwargs
     "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "F403",   # Ignore C extension imports that can't be found
 ]
 
 [tool.ruff.lint.per-file-ignores]
