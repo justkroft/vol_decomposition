@@ -1,19 +1,19 @@
-from setuptools import setup, Extension
+# python setup.py build_ext --inplace
 import numpy
+from setuptools import Extension, find_packages, setup
 
-# Define the extension module
-array_ops_module = Extension(
-    'src.vol_decomposition',
+vol_decomposition_module = Extension(
+    'src._vol_decomposition_c',
     sources=['src/_c_src/vol_decomposition.c'],
     include_dirs=[numpy.get_include()],
-    extra_compile_args=['-O3']  # Optimization flag
+    extra_compile_args=['-O3']
 )
 
 setup(
-    name='array_ops',
+    name='vol_decomposition',
     version='1.0',
-    description='Python C extension for array operations',
-    ext_modules=[array_ops_module],
-    packages=["src"],
+    description='Python C extension for volatility decomposition',
+    packages=find_packages(),
+    ext_modules=[vol_decomposition_module],
     install_requires=['numpy']
 )

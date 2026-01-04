@@ -1,21 +1,14 @@
 import numpy as np
-from src.vol_decomposition import multiply_array
 
+from src.vol_decomposition import compute_realised_variance
 
-# Create a test array
-arr = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-scalar = 2.5
+returns = np.array([
+    0.01, -0.02, 0.015, -0.01, 0.005,  # Day 0
+    0.02, -0.01, 0.008, -0.015, 0.012   # Day 1
+], dtype=np.float64)
 
-# Call the C function
-result = multiply_array(arr, scalar)
+day_indices = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=np.int64)
 
-print("Original array:", arr)
-print("Scalar:", scalar)
-print("Result:", result)
-
-# Test with 2D array
-arr_2d = np.array([[1.0, 2.0], [3.0, 4.0]])
-result_2d = multiply_array(arr_2d, 3.0)
-
-print("\n2D Original:", arr_2d)
-print("2D Result:", result_2d)
+rv = compute_realised_variance(returns, day_indices, n_days=2)
+print(rv)
+print(np.sum(returns[:5] ** 2))
