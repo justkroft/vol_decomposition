@@ -17,10 +17,10 @@ def compute_realised_variance(
 
     Parameters
     ----------
-    returns : numpy.ndarray
+    returns : np.ndarray
         1D array of intraday returns (log returns or simple returns).
         Must be of dtype float64.
-    day_indices : numpy.ndarray
+    day_indices : np.ndarray
         1D array of integer day identifiers corresponding to each return.
         Each element indicates which day (0 to n_days-1) the corresponding
         return belongs to. Must be of dtype int64.
@@ -29,7 +29,7 @@ def compute_realised_variance(
 
     Returns
     -------
-    realized_variance : numpy.ndarray
+    realized_variance : np.ndarray
         1D array of shape (n_days,) containing the realized variance for
         each day, computed as the sum of squared returns: RV_t = Σ r²_{t,i}
 
