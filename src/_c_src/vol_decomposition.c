@@ -2,8 +2,17 @@
 #include <Python.h>
 #define NPY_NO_DEPRECATED_API NPY_1_11_API_VERSION
 #include <numpy/arrayobject.h>
+#include <math.h>
 
-// Compute realized variance from returns
+
+static double mu_func(double p) {
+    double num = pow(2.0, p / 2.0) * tgamma((p + 1.0) / 2.0);
+    double den = tgamma(0.5);   // equals sqrt(pi)
+    return num / den;
+}
+
+
+// realized variance
 static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
     PyArrayObject *returns, *day_indices, *output;
     int n_days;
@@ -23,6 +32,7 @@ static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
     if (output == NULL) {
         return NULL;
     }
+
     // get pointers
     double* ret_arr = (double*) PyArray_DATA(returns);
     long* day_arr = (long*) PyArray_DATA(day_indices);
@@ -30,7 +40,6 @@ static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
 
     const npy_intp n = PyArray_SIZE(returns);
 
-    // actual computation
     for (npy_intp i = 0; i < n; i++) {
         long day_idx = day_arr[i];
         out_arr[day_idx] += ret_arr[i] * ret_arr[i];
@@ -39,10 +48,61 @@ static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
     return (PyObject*) output;
 }
 
+
+// bi-power variance
+static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
+    PyArrayObject *returns, *day_indices, *output;
+    int n_days;
+
+    if (!PyArg_ParseTuple(
+        args, "O!O!i",
+        &PyArray_Type, &returns,
+        &PyArray_Type, &day_indices,
+        &n_days
+    )) {
+        return NULL;
+    }
+
+    // create output array
+    const npy_intp dims[1] = {n_days};
+    output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+    if (output == NULL) {
+        return NULL;
+    }
+
+    // get pointers
+    double* ret_arr = (double*) PyArray_DATA(returns);
+    long* day_arr = (long*) PyArray_DATA(day_indices);
+    double* out_arr = (double*) PyArray_DATA(output);
+
+    const npy_intp n = PyArray_SIZE(returns);
+
+    for (npy_intp i = 1; i < n; i++) {
+        if (day_arr[i] == day_arr[i-1]) {
+            long day_idx = day_arr[i];
+            out_arr[day_idx] += fabs(ret_arr[i-1]) * fabs(ret_arr[i]);
+        }
+    }
+
+    // compute mu_1^(-2)
+    double mu_1 = mu_func(1.0);
+    double mu_1_inv_sq = 1.0 / (mu_1 * mu_1);
+
+    // scale by mu_1^(-2)
+    for (int i = 0; i < n_days; i++) {
+        out_arr[i] *= mu_1_inv_sq;
+    }
+
+    return (PyObject*) output;
+}
+
+
 // Method definitions
 static PyMethodDef VolDecompMethods[] = {
     {"compute_realised_variance", compute_realised_variance, METH_VARARGS, 
      "Compute realised variance"},
+    {"compute_bipower_variance", compute_bipower_variance, METH_VARARGS, 
+     "Compute bi-power variance"}, 
     {NULL, NULL, 0, NULL}
 };
 
