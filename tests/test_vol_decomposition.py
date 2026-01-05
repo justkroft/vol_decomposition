@@ -10,8 +10,9 @@ except ImportError:
     pytest.skip("C extension not compiled", allow_module_level=True)
 
 from src.vol_decomposition import (
-    compute_bipower_variance,
-    compute_realised_variance,
+    bipower_variance,
+    realised_variance,
+    tripower_quarticity,
 )
 
 RTOL = 1e-10
@@ -41,17 +42,17 @@ def multi_day_indices():
     return np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=np.int64)
 
 
-def test_compute_realised_variance_simple(simple_returns, simple_day_indices):
-    actual = compute_realised_variance(simple_returns, simple_day_indices, 1)
+def test_ealised_variance_simple(simple_returns, simple_day_indices):
+    actual = realised_variance(simple_returns, simple_day_indices, 1)
     expected = np.sum(simple_returns ** 2)
 
     np.testing.assert_allclose(actual[0], expected, rtol=RTOL)
 
 
-def test_compute_realised_variance_multi_day(
+def test_ealised_variance_multi_day(
     multi_day_returns, multi_day_indices
 ):
-    actual = compute_realised_variance(multi_day_returns, multi_day_indices, 2)
+    actual = realised_variance(multi_day_returns, multi_day_indices, 2)
 
     # Day 0
     expected_day0 = np.sum(multi_day_returns[:5] ** 2)
@@ -62,18 +63,18 @@ def test_compute_realised_variance_multi_day(
     np.testing.assert_allclose(actual[1], expected_day1, rtol=1e-10)
 
 
-def test_compute_realised_variance_non_negative(
+def test_realised_variance_non_negative(
     multi_day_returns, multi_day_indices
 ):
-    actual = compute_realised_variance(multi_day_returns, multi_day_indices, 2)
+    actual = realised_variance(multi_day_returns, multi_day_indices, 2)
     assert np.all(actual >= 0)
 
 
-def test_compute_realised_variance_zero_returns():
+def test_realised_variance_zero_returns():
     returns = np.zeros(10, dtype=np.float64)
     day_indices = np.zeros(10, dtype=np.int64)
 
-    actual = compute_realised_variance(returns, day_indices, 1)
+    actual = realised_variance(returns, day_indices, 1)
     assert actual[0] == 0.0
 
 
@@ -82,8 +83,8 @@ def mu_func_testing(p):
     return 2**(p/2) * ss.gamma((p+1) / 2) / ss.gamma(1/2)
 
 
-def test_compute_bipower_variance_simple(simple_returns, simple_day_indices):
-    actual = compute_bipower_variance(simple_returns, simple_day_indices, 1)
+def test_bipower_variance_simple(simple_returns, simple_day_indices):
+    actual = bipower_variance(simple_returns, simple_day_indices, 1)
 
     # manual calculation
     mu_1 = mu_func_testing(1.0)
@@ -94,10 +95,8 @@ def test_compute_bipower_variance_simple(simple_returns, simple_day_indices):
     np.testing.assert_allclose(actual[0], expected, rtol=RTOL)
 
 
-def test_compute_bipower_variance_multi_day(
-    multi_day_returns, multi_day_indices
-):
-    actual = compute_bipower_variance(multi_day_returns, multi_day_indices, 2)
+def test_bipower_variance_multi_day(multi_day_returns, multi_day_indices):
+    actual = bipower_variance(multi_day_returns, multi_day_indices, 2)
 
     # Manual calculation
     mu_1 = mu_func_testing(1.0)
@@ -114,18 +113,16 @@ def test_compute_bipower_variance_multi_day(
     np.testing.assert_allclose(actual[1], expected_day1, rtol=1e-10)
 
 
-def test_compute_bipower_variance_non_negative(
-    multi_day_returns, multi_day_indices
-):
-    actual = compute_bipower_variance(multi_day_returns, multi_day_indices, 2)
+def test_bipower_variance_non_negative(multi_day_returns, multi_day_indices):
+    actual = bipower_variance(multi_day_returns, multi_day_indices, 2)
     assert np.all(actual >= 0)
 
 
-def test_compute_bipower_variance_no_cross_contamination():
+def test_bipower_variance_no_cross_contamination():
     returns = np.array([0.01, 0.02, 0.03, 0.04], dtype=np.float64)
     day_indices = np.array([0, 0, 1, 1], dtype=np.int64)
 
-    actual = compute_bipower_variance(returns, day_indices, 2)
+    actual = bipower_variance(returns, day_indices, 2)
 
     mu_1 = mu_func_testing(1.0)
     mu_1_inv_sq = mu_1**(-2)
@@ -137,3 +134,50 @@ def test_compute_bipower_variance_no_cross_contamination():
     # Day 1: only |0.03| * |0.04|
     expected_day1 = 0.03 * 0.04 * mu_1_inv_sq
     np.testing.assert_allclose(actual[1], expected_day1, rtol=1e-10)
+
+
+def test_tripower_quarticity_simple(simple_returns, simple_day_indices):
+    mu_43 = mu_func_testing(4.0/3.0)
+    delta = 1.0 / 288.0
+
+    actual = tripower_quarticity(simple_returns, simple_day_indices, 1, delta)
+
+    # Manual calculation
+    abs_returns = np.abs(simple_returns)
+    expected = 0.0
+    for i in range(2, len(abs_returns)):
+        expected += (
+            abs_returns[i-2]**(4/3)
+            * abs_returns[i-1]**(4/3)
+            * abs_returns[i]**(4/3)
+        )
+    expected /= (delta * mu_43**3)
+
+    np.testing.assert_allclose(actual[0], expected, rtol=1e-10)
+
+
+def test_tripower_quarticity_multi_day(multi_day_returns, multi_day_indices):
+    delta = 1.0 / 288.0
+
+    actual = tripower_quarticity(
+        multi_day_returns, multi_day_indices, 2, delta
+    )
+
+    assert actual.shape == (2,)
+    assert np.all(actual >= 0)
+
+
+def test_tripower_quarticity_no_cross_contamination():
+    returns = np.array([0.01, 0.02, 0.03, 0.04, 0.05], dtype=np.float64)
+    day_indices = np.array([0, 0, 0, 1, 1], dtype=np.int64)
+    mu_43 = mu_func_testing(4.0/3.0)
+    delta = 1.0 / 288.0
+
+    actual = tripower_quarticity(returns, day_indices, 2, delta)
+
+    # Day 0: has 3 observations, so 1 triplet (0.01, 0.02, 0.03)
+    expected_day0 = (0.01**(4/3) * 0.02**(4/3) * 0.03**(4/3)) / (delta * mu_43**3)  # noqa: E501
+    np.testing.assert_allclose(actual[0], expected_day0, rtol=1e-10)
+
+    # Day 1: only 2 observations, no triplets
+    assert actual[1] == 0.0

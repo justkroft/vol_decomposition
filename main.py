@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.special as ss
 
-from src._vol_decomposition_c import compute_bipower_variance
+from src._vol_decomposition_c import compute_bipower_variance, compute_tripower_quarticity
 from src.vol_decomposition import compute_realised_variance
 
 

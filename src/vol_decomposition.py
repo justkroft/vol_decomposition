@@ -3,7 +3,7 @@ import numpy as np
 import src._vol_decomposition_c as _c
 
 
-def compute_realised_variance(
+def realised_variance(
     returns: np.ndarray,
     day_indices: np.ndarray,
     n_days: int
@@ -53,13 +53,13 @@ def compute_realised_variance(
     return _c.compute_realised_variance(returns, day_indices, n_days)
 
 
-def compute_bipower_variance(
+def bipower_variance(
     returns: np.ndarray,
     day_indices: np.ndarray,
     n_days: int
 ) -> np.ndarray:
     """
-    Compute the bipower variance for each day from intraday returns.
+    Compute the bi-power variance for each day from intraday returns.
 
     Parameters
     ----------
@@ -80,3 +80,35 @@ def compute_bipower_variance(
         day.
     """
     return _c.compute_bipower_variance(returns, day_indices, n_days)
+
+
+def tripower_quarticity(
+    returns: np.ndarray,
+    day_indices: np.ndarray,
+    n_days: int,
+    delta: float
+) -> np.ndarray:
+    """
+    Compute the tri-power quarticity for each day from intraday returns.
+
+    Parameters
+    ----------
+    returns : np.ndarray
+        1D array of intraday returns (log returns or simple returns).
+        Must be of dtype float64.
+    day_indices : np.ndarray
+        1D array of integer day identifiers corresponding to each return.
+        Each element indicates which day (0 to n_days-1) the corresponding
+        return belongs to. Must be of dtype int64.
+    n_days : int
+        Total number of unique trading days in the dataset.
+    delta : float
+        The intraday sampling frequency
+
+    Returns
+    -------
+    np.ndarray
+        1D array of shape (n_days,) containing the tri-power quarticity for
+        each day.
+    """
+    return _c.compute_tripower_quarticity(returns, day_indices, n_days, delta)
