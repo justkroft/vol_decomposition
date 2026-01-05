@@ -29,19 +29,9 @@ def compute_realised_variance(
 
     Returns
     -------
-    realized_variance : np.ndarray
+    np.ndarray
         1D array of shape (n_days,) containing the realized variance for
-        each day, computed as the sum of squared returns: RV_t = Σ r²_{t,i}
-
-    Notes
-    -----
-    The realized variance for day t is defined as:
-
-    .. math::
-        RV_t = \\sum_{i=1}^{n_t} r_{t,i}^2
-
-    where r_{t,i} is the i-th intraday return on day t, and n_t is the
-    number of observations on day t.
+        each day.
 
     Examples
     --------
@@ -61,3 +51,32 @@ def compute_realised_variance(
     >>> # Day 1: 0.01² + (-0.005)² = 0.000125
     """
     return _c.compute_realised_variance(returns, day_indices, n_days)
+
+
+def compute_bipower_variance(
+    returns: np.ndarray,
+    day_indices: np.ndarray,
+    n_days: int
+) -> np.ndarray:
+    """
+    Compute the bipower variance for each day from intraday returns.
+
+    Parameters
+    ----------
+    returns : np.ndarray
+        1D array of intraday returns (log returns or simple returns).
+        Must be of dtype float64.
+    day_indices : np.ndarray
+        1D array of integer day identifiers corresponding to each return.
+        Each element indicates which day (0 to n_days-1) the corresponding
+        return belongs to. Must be of dtype int64.
+    n_days : int
+        Total number of unique trading days in the dataset.
+
+    Returns
+    -------
+    np.ndarray
+        1D array of shape (n_days,) containing the bi-power variance for each
+        day.
+    """
+    return _c.compute_bipower_variance(returns, day_indices, n_days)
