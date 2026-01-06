@@ -84,8 +84,8 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
     }
 
     // compute mu_1^(-2)
-    double mu_1 = mu_func(1.0);
-    double mu_1_inv_sq = 1.0 / (mu_1 * mu_1);
+    const double mu_1 = mu_func(1.0);
+    const double mu_1_inv_sq = 1.0 / (mu_1 * mu_1);
 
     // scale by mu_1^(-2)
     for (int i = 0; i < n_days; i++) {
@@ -136,11 +136,67 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
     }
     
     // compute mu_43^3 and scale
-    double mu_43 = mu_func(4.0 / 3.0);
+    const double mu_43 = mu_func(4.0 / 3.0);
 
-    double scale = delta * mu_43 * mu_43 * mu_43;
+    const double scale = delta * mu_43 * mu_43 * mu_43;
     for (int i = 0; i < n_days; i++) {
         out_arr[i] /= scale;
+    }
+
+    return (PyObject*) output;
+}
+
+
+// z-statistic
+static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
+    PyArrayObject *realised_variance, *bipower_variance, *tripower_quarticity, *output;
+    double delta;
+
+    if (!PyArg_ParseTuple(
+        args, "O!O!O!d",
+        &PyArray_Type, &realised_variance,
+        &PyArray_Type, &bipower_variance,
+        &PyArray_Type, &tripower_quarticity,
+        &delta
+    )) {
+        return NULL;
+    }
+
+    const npy_intp n = PyArray_SIZE(realised_variance);
+    npy_intp dims[1] = {n};
+    output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+    if (output == NULL) {
+        return NULL;
+    }
+
+    double* rv_arr = (double*) PyArray_DATA(realised_variance);
+    double* bpv_arr = (double*) PyArray_DATA(bipower_variance);
+    double* tpq_arr = (double*) PyArray_DATA(tripower_quarticity);
+    double* out_arr = (double*) PyArray_DATA(output);
+
+    const double mu_1 = mu_func(1);
+    const double mu_1_inv_4 = 1.0 / (mu_1 * mu_1 * mu_1 * mu_1);
+    const double mu_1_inv_2 = 1.0 / (mu_1 * mu_1);
+    const double const_term = sqrt(mu_1_inv_4 + 2.0 * mu_1_inv_2 - 5.0);
+    const double sqrt_delta = sqrt(delta);
+
+    for (npy_intp i = 0; i < n; i++) {
+        double max_func;
+        if (bpv_arr[i] != 0.0) {
+            double ratio = tpq_arr[i] / (bpv_arr[i] * bpv_arr[i]);
+            max_func = fmax(1.0, ratio);
+        } 
+        else {
+            max_func = 1.0;
+        }
+
+        if (rv_arr[i] > 0.0) {
+            out_arr[i] = (rv_arr[i] - bpv_arr[i])
+                       / (rv_arr[i] * const_term * max_func * sqrt_delta);
+        }
+        else {
+            out_arr[i] = 0.0;
+        }
     }
 
     return (PyObject*) output;
@@ -166,6 +222,12 @@ static PyMethodDef VolDecompMethods[] = {
         compute_tripower_quarticity,
         METH_VARARGS,
         "Compute tri-power quarticity"
+    },
+    {
+        "compute_z_stats",
+        compute_z_stats,
+        METH_VARARGS,
+        "Compute the z-statistics for jump"
     },
     {NULL, NULL, 0, NULL}
 };
