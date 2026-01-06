@@ -12,82 +12,121 @@ static double mu_func(double p) {
 }
 
 
-// realized variance
-static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
-    PyObject *returns_obj = NULL, *day_indices_obj = NULL;
-    PyArrayObject *returns = NULL, *day_indices = NULL, *output = NULL;
+typedef struct {
+    PyArrayObject* returns;
+    PyArrayObject* day_indices;
+    PyArrayObject* output;
+    npy_intp n;
     npy_intp n_days;
+} VarInputs;
+
+
+static int prepare_var_inputs(PyObject* args, VarInputs* in) {
+    PyObject* returns_obj = NULL;
+    PyObject* day_indices_obj = NULL;
+
+    in->returns = NULL;
+    in->day_indices = NULL;
+    in->output = NULL;
 
     if (!PyArg_ParseTuple(
         args, "O!O!n",
         &PyArray_Type, &returns_obj,
         &PyArray_Type, &day_indices_obj,
-        &n_days
+        &in->n_days
     )) {
-        return NULL;
+        return 0;
     }
 
-    if (n_days <= 0) {
+    if (in->n_days <= 0) {
         PyErr_SetString(PyExc_ValueError, "n_days must be positive");
-        return NULL;
+        return 0;
     }
 
-    // Convert inputs to well-defined NumPy arrays
-    returns = (PyArrayObject*) PyArray_FROM_OTF(
+    // convert inputs to well-defined NumPy arrays
+    in->returns = (PyArrayObject*) PyArray_FROM_OTF(
         returns_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
     );
-    if (returns == NULL) {
-        return NULL;
+    if (!in->returns) {
+        return 0;
     }
 
-    day_indices = (PyArrayObject*) PyArray_FROM_OTF(
+    in->day_indices = (PyArrayObject*) PyArray_FROM_OTF(
         day_indices_obj, NPY_INT64, NPY_ARRAY_IN_ARRAY
     );
-    if (day_indices == NULL) {
-        Py_DECREF(returns);
-        return NULL;
+    if (!in->day_indices) {
+        Py_DECREF(in->returns);
+        in->returns = NULL;
+        return 0;
     }
 
-    // Validate dimensions
-    if (PyArray_NDIM(returns) != 1 || PyArray_NDIM(day_indices) != 1) {
-        PyErr_SetString(PyExc_ValueError, "returns and day_indices must be 1D arrays");
-        Py_DECREF(returns);
-        Py_DECREF(day_indices);
-        return NULL;
+    // validate dimensions
+    if (PyArray_NDIM(in->returns) != 1 ||
+        PyArray_NDIM(in->day_indices) != 1)
+    {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "returns and day_indices must be 1-D arrays"
+        );
+        Py_DECREF(in->returns);
+        Py_DECREF(in->day_indices);
+        in->returns = in->day_indices = NULL;
+        return 0;
     }
 
-    if (PyArray_SIZE(returns) != PyArray_SIZE(day_indices)) {
-        PyErr_SetString(PyExc_ValueError, "returns and day_indices must have the same length");
-        Py_DECREF(returns);
-        Py_DECREF(day_indices);
-        return NULL;
+    in->n = PyArray_SIZE(in->returns);
+    if (in->n != PyArray_SIZE(in->day_indices)) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "returns and day_indices must have the same length"
+        );
+        Py_DECREF(in->returns);
+        Py_DECREF(in->day_indices);
+        in->returns = in->day_indices = NULL;
+        return 0;
     }
 
-    // Create output array
-    npy_intp dims[1] = {n_days};
-    output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
-    if (output == NULL) {
-        Py_DECREF(returns);
-        Py_DECREF(day_indices);
+    // create output array
+    const npy_intp dims[1] = { in->n_days };
+    in->output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+    if (!in->output) {
+        Py_DECREF(in->returns);
+        Py_DECREF(in->day_indices);
+        in->returns = in->day_indices = NULL;
+        return 0;
+    }
+
+    return 1;
+}
+
+
+// helper function to clean up
+static void free_var_inputs(VarInputs* in) {
+    Py_XDECREF(in->returns);
+    Py_XDECREF(in->day_indices);
+    Py_XDECREF(in->output);
+}
+
+
+// realized variance
+static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
+    VarInputs in;
+    if (!prepare_var_inputs(args, &in)) {
         return NULL;
     }
 
     // get pointers
-    double* ret_arr = (double*) PyArray_DATA(returns);
-    int64_t* day_arr = (int64_t*) PyArray_DATA(day_indices);
-    double* out_arr = (double*) PyArray_DATA(output);
-
-    const npy_intp n = PyArray_SIZE(returns);
+    double* ret_arr = (double*) PyArray_DATA(in.returns);
+    int64_t* day_arr = (int64_t*) PyArray_DATA(in.day_indices);
+    double* out_arr = (double*) PyArray_DATA(in.output);
 
     // do actual computation
-    for (npy_intp i = 0; i < n; i++) {
+    for (npy_intp i = 0; i < in.n; i++) {
         int64_t day_idx = day_arr[i];
 
         if (day_idx < 0) {
             PyErr_SetString(PyExc_IndexError, "day_indices contains out-of-bounds value (< 0)");
-            Py_DECREF(returns);
-            Py_DECREF(day_indices);
-            Py_DECREF(output);
+            free_var_inputs(&in);
             return NULL;
         }
 
@@ -95,76 +134,24 @@ static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
         out_arr[day_idx] += r * r;
     }
 
-    Py_DECREF(returns);
-    Py_DECREF(day_indices);
-    return (PyObject*) output;
+    Py_DECREF(in.returns);
+    Py_DECREF(in.day_indices);
+    return (PyObject*) in.output;
 }
 
 
 // bi-power variance
 static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
-    PyObject *returns_obj = NULL, *day_indices_obj = NULL;
-    PyArrayObject *returns = NULL, *day_indices = NULL, *output = NULL;
-    npy_intp n_days;
-
-    if (!PyArg_ParseTuple(
-        args, "O!O!n",
-        &PyArray_Type, &returns_obj,
-        &PyArray_Type, &day_indices_obj,
-        &n_days
-    )) {
+    VarInputs in;
+    if (!prepare_var_inputs(args, &in)) {
         return NULL;
     }
 
-    if (n_days <= 0) {
-        PyErr_SetString(PyExc_ValueError, "n_days must be positive");
-        return NULL;
-    }
+    double* ret_arr = (double*) PyArray_DATA(in.returns);
+    int64_t* day_arr = (int64_t*) PyArray_DATA(in.day_indices);
+    double* out_arr = (double*) PyArray_DATA(in.output);
 
-    returns = (PyArrayObject*) PyArray_FROM_OTF(
-        returns_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
-    );
-    if (returns == NULL) {
-        return NULL;
-    }
-
-    day_indices = (PyArrayObject*) PyArray_FROM_OTF(
-        day_indices_obj, NPY_INT64, NPY_ARRAY_IN_ARRAY
-    );
-    if (day_indices == NULL) {
-        Py_DECREF(returns);
-        return NULL;
-    }
-
-    if (PyArray_NDIM(returns) != 1 || PyArray_NDIM(day_indices) != 1) {
-        PyErr_SetString(PyExc_ValueError, "returns and day_indices must be 1D arrays");
-        Py_DECREF(returns);
-        Py_DECREF(day_indices);
-        return NULL;
-    }
-
-    if (PyArray_SIZE(returns) != PyArray_SIZE(day_indices)) {
-        PyErr_SetString(PyExc_ValueError, "returns and day_indices must have the same length");
-        Py_DECREF(returns);
-        Py_DECREF(day_indices);
-        return NULL;
-    }
-
-    const npy_intp dims[1] = {n_days};
-    output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
-    if (output == NULL) {
-        Py_DECREF(returns);
-        Py_DECREF(day_indices);
-        return NULL;
-    }
-
-    double* ret_arr = (double*) PyArray_DATA(returns);
-    int64_t* day_arr = (int64_t*) PyArray_DATA(day_indices);
-    double* out_arr = (double*) PyArray_DATA(output);
-
-    const npy_intp n = PyArray_SIZE(returns);
-
-    for (npy_intp i = 1; i < n; i++) {
+    for (npy_intp i = 1; i < in.n; i++) {
         if (day_arr[i] == day_arr[i-1]) {
             int64_t day_idx = day_arr[i];
 
@@ -173,9 +160,7 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
                     PyExc_IndexError,
                     "day_indices contains out-of-bounds value (< 0)"
                 );
-                Py_DECREF(returns);
-                Py_DECREF(day_indices);
-                Py_DECREF(output);
+                free_var_inputs(&in);
                 return NULL;
             }
 
@@ -188,13 +173,13 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
     const double mu_1_inv_sq = 1.0 / (mu_1 * mu_1);
 
     // scale by mu_1^(-2)
-    for (int i = 0; i < n_days; i++) {
+    for (int i = 0; i < in.n_days; i++) {
         out_arr[i] *= mu_1_inv_sq;
     }
 
-    Py_DECREF(returns);
-    Py_DECREF(day_indices);
-    return (PyObject*) output;
+    Py_DECREF(in.returns);
+    Py_DECREF(in.day_indices);
+    return (PyObject*) in.output;
 }
 
 
