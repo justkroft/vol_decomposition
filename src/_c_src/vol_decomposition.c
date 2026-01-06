@@ -14,38 +14,89 @@ static double mu_func(double p) {
 
 // realized variance
 static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
-    PyArrayObject *returns, *day_indices, *output;
-    int n_days;
+    PyObject *returns_obj = NULL, *day_indices_obj = NULL;
+    PyArrayObject *returns = NULL, *day_indices = NULL, *output = NULL;
+    npy_intp n_days;
 
     if (!PyArg_ParseTuple(
-        args, "O!O!i",
-        &PyArray_Type, &returns,
-        &PyArray_Type, &day_indices,
+        args, "O!O!n",
+        &PyArray_Type, &returns_obj,
+        &PyArray_Type, &day_indices_obj,
         &n_days
     )) {
         return NULL;
     }
 
-    // create output array
-    const npy_intp dims[1] = {n_days};
+    if (n_days <= 0) {
+        PyErr_SetString(PyExc_ValueError, "n_days must be positive");
+        return NULL;
+    }
+
+    // Convert inputs to well-defined NumPy arrays
+    returns = (PyArrayObject*) PyArray_FROM_OTF(
+        returns_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
+    );
+    if (returns == NULL) {
+        return NULL;
+    }
+
+    day_indices = (PyArrayObject*) PyArray_FROM_OTF(
+        day_indices_obj, NPY_INT64, NPY_ARRAY_IN_ARRAY
+    );
+    if (day_indices == NULL) {
+        Py_DECREF(returns);
+        return NULL;
+    }
+
+    // Validate dimensions
+    if (PyArray_NDIM(returns) != 1 || PyArray_NDIM(day_indices) != 1) {
+        PyErr_SetString(PyExc_ValueError, "returns and day_indices must be 1D arrays");
+        Py_DECREF(returns);
+        Py_DECREF(day_indices);
+        return NULL;
+    }
+
+    if (PyArray_SIZE(returns) != PyArray_SIZE(day_indices)) {
+        PyErr_SetString(PyExc_ValueError, "returns and day_indices must have the same length");
+        Py_DECREF(returns);
+        Py_DECREF(day_indices);
+        return NULL;
+    }
+
+    // Create output array
+    npy_intp dims[1] = {n_days};
     output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
     if (output == NULL) {
+        Py_DECREF(returns);
+        Py_DECREF(day_indices);
         return NULL;
     }
 
     // get pointers
     double* ret_arr = (double*) PyArray_DATA(returns);
-    long* day_arr = (long*) PyArray_DATA(day_indices);
+    int64_t* day_arr = (int64_t*) PyArray_DATA(day_indices);
     double* out_arr = (double*) PyArray_DATA(output);
 
     const npy_intp n = PyArray_SIZE(returns);
 
     // do actual computation
     for (npy_intp i = 0; i < n; i++) {
-        long day_idx = day_arr[i];
-        out_arr[day_idx] += ret_arr[i] * ret_arr[i];
+        int64_t day_idx = day_arr[i];
+
+        if (day_idx < 0) {
+            PyErr_SetString(PyExc_IndexError, "day_indices contains out-of-bounds value (< 0)");
+            Py_DECREF(returns);
+            Py_DECREF(day_indices);
+            Py_DECREF(output);
+            return NULL;
+        }
+
+        double r = ret_arr[i];
+        out_arr[day_idx] += r * r;
     }
 
+    Py_DECREF(returns);
+    Py_DECREF(day_indices);
     return (PyObject*) output;
 }
 
@@ -61,6 +112,11 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
         &PyArray_Type, &day_indices,
         &n_days
     )) {
+        return NULL;
+    }
+
+    if (n_days <= 0) {
+        PyErr_SetString(PyExc_ValueError, "n_days must be positive");
         return NULL;
     }
 
@@ -109,6 +165,11 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
         &n_days,
         &delta
     )) {
+        return NULL;
+    }
+
+    if (n_days <= 0) {
+        PyErr_SetString(PyExc_ValueError, "n_days must be positive");
         return NULL;
     }
 
@@ -201,6 +262,15 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
 
     return (PyObject*) output;
 }
+
+
+// apply jumpy filter; compute continous and jumpy component
+// static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
+//     PyArrayObject *realised_variance, *bipower_variance, *z_stats;
+//     PyArrayObject *cont_out, *jump_out;
+//     double sig_threshold;
+//     int truncate_zero;
+// }
 
 
 // Method definitions
