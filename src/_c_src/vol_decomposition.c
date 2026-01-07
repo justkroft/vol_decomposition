@@ -2,6 +2,7 @@
 #include <Python.h>
 #define NPY_NO_DEPRECATED_API NPY_1_11_API_VERSION
 #include <numpy/arrayobject.h>
+#include <numpy/npy_math.h>
 #include <math.h>
 
 
@@ -226,8 +227,8 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
     }
 
     double* ret_arr = (double*) PyArray_DATA(in.returns);
-    int64_t *day_arr = (int64_t*) PyArray_DATA(in.day_indices);
-    double *out_arr = (double*) PyArray_DATA(in.output);
+    int64_t* day_arr = (int64_t*) PyArray_DATA(in.day_indices);
+    double* out_arr = (double*) PyArray_DATA(in.output);
 
     const double exponent = 4.0 / 3.0;
 
@@ -265,23 +266,84 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
 
 // z-statistic
 static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
-    PyArrayObject *realised_variance, *bipower_variance, *tripower_quarticity, *output;
-    double delta;
+    PyObject *realised_variance_obj = NULL;
+    PyObject *bipower_variance_obj = NULL;
+    PyObject *tripower_quarticity_obj = NULL;
+    PyArrayObject *realised_variance = NULL;
+    PyArrayObject *bipower_variance = NULL;
+    PyArrayObject *tripower_quarticity = NULL;
+    PyArrayObject *output = NULL;
 
     if (!PyArg_ParseTuple(
-        args, "O!O!O!d",
-        &PyArray_Type, &realised_variance,
-        &PyArray_Type, &bipower_variance,
-        &PyArray_Type, &tripower_quarticity,
-        &delta
+        args, "O!O!O!",
+        &PyArray_Type, &realised_variance_obj,
+        &PyArray_Type, &bipower_variance_obj,
+        &PyArray_Type, &tripower_quarticity_obj
     )) {
         return NULL;
     }
 
+    realised_variance = (PyArrayObject*) PyArray_FROM_OTF(
+        realised_variance_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
+    );
+    if (realised_variance == NULL) {
+        return NULL;
+    }
+
+    bipower_variance = (PyArrayObject*) PyArray_FROM_OTF(
+        bipower_variance_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
+    );
+    if (bipower_variance == NULL) {
+        Py_DECREF(realised_variance);
+        return NULL;
+    }
+
+    tripower_quarticity = (PyArrayObject*) PyArray_FROM_OTF(
+        tripower_quarticity_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
+    );
+    if (tripower_quarticity == NULL) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        return NULL;
+    }
+
+    if (
+        PyArray_NDIM(realised_variance) != 1
+        || PyArray_NDIM(bipower_variance) != 1
+        || PyArray_NDIM(tripower_quarticity) != 1
+    ) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "realised_variance, bipower_variance, and tripower_quarticity must be 1-D arrays"
+        );
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(tripower_quarticity);
+        return NULL;
+    }
+
     const npy_intp n = PyArray_SIZE(realised_variance);
+    
+    if (
+        PyArray_SIZE(bipower_variance) != n
+        || PyArray_SIZE(tripower_quarticity) != n
+    ) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "all input arrays must have the same length"
+        );
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(tripower_quarticity);
+        return NULL;
+    }
+
     npy_intp dims[1] = {n};
     output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
     if (output == NULL) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(tripower_quarticity);
         return NULL;
     }
 
@@ -290,42 +352,154 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
     double* tpq_arr = (double*) PyArray_DATA(tripower_quarticity);
     double* out_arr = (double*) PyArray_DATA(output);
 
-    const double mu_1 = mu_func(1);
-    const double mu_1_inv_4 = 1.0 / (mu_1 * mu_1 * mu_1 * mu_1);
-    const double mu_1_inv_2 = 1.0 / (mu_1 * mu_1);
-    const double const_term = sqrt(mu_1_inv_4 + 2.0 * mu_1_inv_2 - 5.0);
-    const double sqrt_delta = sqrt(delta);
+    const double const_term = (NPY_PI * NPY_PI) / 4 + NPY_PI - 5;
 
     for (npy_intp i = 0; i < n; i++) {
         double max_func;
+        double ratio;
         if (bpv_arr[i] != 0.0) {
-            double ratio = tpq_arr[i] / (bpv_arr[i] * bpv_arr[i]);
+            ratio = tpq_arr[i] / (bpv_arr[i] * bpv_arr[i]);
             max_func = fmax(1.0, ratio);
-        } 
+        }
         else {
             max_func = 1.0;
         }
 
         if (rv_arr[i] > 0.0) {
             out_arr[i] = (rv_arr[i] - bpv_arr[i])
-                       / (rv_arr[i] * const_term * max_func * sqrt_delta);
+                       / (rv_arr[i] * sqrt(const_term * max_func));
         }
         else {
             out_arr[i] = 0.0;
         }
     }
 
+    Py_DECREF(realised_variance);
+    Py_DECREF(bipower_variance);
+    Py_DECREF(tripower_quarticity);
     return (PyObject*) output;
 }
 
 
 // apply jumpy filter; compute continous and jumpy component
-// static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
-//     PyArrayObject *realised_variance, *bipower_variance, *z_stats;
-//     PyArrayObject *cont_out, *jump_out;
-//     double sig_threshold;
-//     int truncate_zero;
-// }
+static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
+    PyObject *realised_variance_obj = NULL;
+    PyObject *bipower_variance_obj = NULL;
+    PyObject *z_stats_obj = NULL;
+    PyArrayObject *realised_variance = NULL;
+    PyArrayObject *bipower_variance = NULL;
+    PyArrayObject *z_stats = NULL;
+    PyArrayObject *cont_out = NULL, *jump_out = NULL;
+    double sig_threshold;
+    npy_intp truncate_zero;
+
+    if (!PyArg_ParseTuple(
+        args, "O!O!O!dn",
+        &PyArray_Type, &realised_variance_obj,
+        &PyArray_Type, &bipower_variance_obj,
+        &PyArray_Type, &z_stats_obj,
+        &sig_threshold,
+        &truncate_zero
+    )) {
+        return NULL;
+    }
+
+    if (sig_threshold <= 0.0 || sig_threshold >= 1) {
+        PyErr_SetString(PyExc_ValueError, "sig_threshold must be between 0 and 1");
+        return NULL;
+    }
+
+    realised_variance = (PyArrayObject*) PyArray_FROM_OTF(
+        realised_variance_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
+    );
+    if (realised_variance == NULL) {
+        return NULL;
+    }
+
+    bipower_variance = (PyArrayObject*) PyArray_FROM_OTF(
+        bipower_variance_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
+    );
+    if (bipower_variance == NULL) {
+        Py_DECREF(realised_variance);
+        return NULL;
+    }
+
+    z_stats = (PyArrayObject*) PyArray_FROM_OTF(
+        z_stats_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
+    );
+    if (z_stats == NULL) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        return NULL;
+    }
+
+    if (
+        PyArray_NDIM(realised_variance) != 1
+        || PyArray_NDIM(bipower_variance) != 1
+        || PyArray_NDIM(z_stats) != 1
+    ) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "realised_variance, bipower_variance, and z_stats must be 1-D arrays"
+        );
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(z_stats);
+        return NULL;
+    }
+
+    const npy_intp n = PyArray_SIZE(realised_variance);
+
+    if (
+        PyArray_SIZE(bipower_variance) != n
+        || PyArray_SIZE(z_stats) != n
+    ) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "all input arrays must have the same length"
+        );
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(z_stats);
+        return NULL;
+    }
+
+    npy_intp dims[1] = {n};
+    cont_out = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+    jump_out = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+
+    if (cont_out == NULL || jump_out == NULL) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(z_stats);
+        return NULL;
+    }
+
+    double* rv_arr = (double*) PyArray_DATA(realised_variance);
+    double* bpv_arr = (double*) PyArray_DATA(bipower_variance);
+    double* z_arr = (double*) PyArray_DATA(z_stats);
+    double* cont_arr = (double*) PyArray_DATA(cont_out);
+    double* jump_arr = (double*) PyArray_DATA(jump_out);
+
+    for (npy_intp i = 0; i < n; i++) {
+        double raw_jump = rv_arr[i] - bpv_arr[i];
+
+        if (truncate_zero && raw_jump < 0.0) {
+            raw_jump = 0.0;
+        }
+
+        if (z_arr[i] > sig_threshold) {
+            jump_arr[i] = raw_jump;
+        }
+        else {
+            jump_arr[i] = 0.0;
+        }
+
+        cont_arr[i] = rv_arr[i] - jump_arr[i];
+    }
+
+    return Py_BuildValue("(OO)", cont_out, jump_out);
+}
 
 
 // Method definitions
@@ -353,6 +527,12 @@ static PyMethodDef VolDecompMethods[] = {
         compute_z_stats,
         METH_VARARGS,
         "Compute the z-statistics for jump"
+    },
+    {
+        "apply_jump_filter",
+        apply_jump_filter,
+        METH_VARARGS,
+        "Apply the filter fo jump significance"
     },
     {NULL, NULL, 0, NULL}
 };

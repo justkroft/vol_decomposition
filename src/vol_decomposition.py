@@ -112,3 +112,33 @@ def tripower_quarticity(
         each day.
     """
     return _c.compute_tripower_quarticity(returns, day_indices, n_days, delta)
+
+
+def z_stats(
+    realised_variance: np.ndarray,
+    bipower_variance: np.ndarray,
+    tripower_quarticity: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute the Z-statistics of the
+
+    Parameters
+    ----------
+    realised_variance : np.ndarray
+        1D array of realised variance, must be of dtype float64.
+    bipower_variance : np.ndarray
+        1D array of bi-power variance, must be of dtype float64.
+    tripower_quarticity : np.ndarray
+        1D array of tri-power quarticity, must be of dtype float64.
+
+    Returns
+    -------
+    np.ndarray
+        1D array with the same shape as the input arrays, containing the
+        computed Z-Statistics for the jumps.
+    """
+    return _c.compute_z_stats(
+        realised_variance,
+        bipower_variance,
+        tripower_quarticity
+    )

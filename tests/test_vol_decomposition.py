@@ -13,6 +13,7 @@ from src.vol_decomposition import (
     bipower_variance,
     realised_variance,
     tripower_quarticity,
+    z_stats,
 )
 
 RTOL = 1e-10
@@ -181,3 +182,43 @@ def test_tripower_quarticity_no_cross_contamination():
 
     # Day 1: only 2 observations, no triplets
     assert actual[1] == 0.0
+
+
+def test_z_stats():
+    rv = np.array([0.001, 0.002], dtype=np.float64)
+    bpvar = np.array([0.0008, 0.0015], dtype=np.float64)
+    tpvar = np.array([0.0001, 0.0002], dtype=np.float64)
+
+    stats = z_stats(rv, bpvar, tpvar)
+
+    assert stats.shape == (2,)
+    assert stats.dtype == np.float64
+    # Z-stats should be finite
+    assert np.all(np.isfinite(stats))
+
+
+def test_z_stats_zero_bipower_variance():
+    rv = np.array([0.001], dtype=np.float64)
+    bpvar = np.array([0.0], dtype=np.float64)
+    tpvar = np.array([0.0001], dtype=np.float64)
+
+    stats = z_stats(rv, bpvar, tpvar)
+
+    # Should handle gracefully without division by zero
+    assert np.isfinite(stats[0])
+
+
+def test_z_stats_manual_comparison():
+    rv = np.array([0.01], dtype=np.float64)
+    bpvar = np.array([0.008], dtype=np.float64)
+    tpvar = np.array([0.0001], dtype=np.float64)
+
+    stats = z_stats(rv, bpvar, tpvar)
+
+    # Manual calculation NPY_PI
+    const_term = (np.pi**2) / 4 + np.pi - 5
+    max_func = max(1.0, tpvar[0] / bpvar[0]**2)
+    expected = (rv[0] - bpvar[0]) / (rv[0] * np.sqrt(const_term * max_func))
+
+    np.testing.assert_allclose(stats[0], expected, rtol=1e-10)
+

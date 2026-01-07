@@ -1,8 +1,8 @@
 import numpy as np
 import scipy.special as ss
 
-from src._vol_decomposition_c import compute_bipower_variance, compute_tripower_quarticity
-from src.vol_decomposition import compute_realised_variance
+# from src._vol_decomposition_c import compute_bipower_variance, compute_tripower_quarticity
+from src.vol_decomposition import realised_variance, bipower_variance
 
 
 def mu_func(p):
@@ -10,14 +10,15 @@ def mu_func(p):
     return 2**(p/2) * ss.gamma((p+1) / 2) / ss.gamma(1/2)
 
 
+
 returns = np.array([
     0.01, -0.02, 0.015, -0.01, 0.005,  # Day 0
     0.02, -0.01, 0.008, -0.015, 0.012   # Day 1
 ], dtype=np.float64)
 
-day_indices = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=np.int64)
+day_indices = np.array([[0, 0, 0, 0, 0, 1, 1, 1, 1, 1]], dtype=np.int64)
 
-bv = compute_bipower_variance(returns, day_indices, 2)
+bv = bipower_variance(returns, day_indices, 2)
 print(bv)
 print(type(bv))
 
