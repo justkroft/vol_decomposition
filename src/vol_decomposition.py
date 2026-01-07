@@ -103,7 +103,7 @@ def tripower_quarticity(
     n_days : int
         Total number of unique trading days in the dataset.
     delta : float
-        The intraday sampling frequency
+        The intraday sampling frequency.
 
     Returns
     -------
@@ -118,6 +118,7 @@ def z_stats(
     realised_variance: np.ndarray,
     bipower_variance: np.ndarray,
     tripower_quarticity: np.ndarray,
+    delta: float
 ) -> np.ndarray:
     """
     Compute the Z-statistics of the
@@ -130,6 +131,8 @@ def z_stats(
         1D array of bi-power variance, must be of dtype float64.
     tripower_quarticity : np.ndarray
         1D array of tri-power quarticity, must be of dtype float64.
+    delta : float
+        The intraday sampling frequency.
 
     Returns
     -------
@@ -140,5 +143,6 @@ def z_stats(
     return _c.compute_z_stats(
         realised_variance,
         bipower_variance,
-        tripower_quarticity
+        tripower_quarticity,
+        delta
     )

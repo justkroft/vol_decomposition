@@ -187,9 +187,10 @@ def test_tripower_quarticity_no_cross_contamination():
 def test_z_stats():
     rv = np.array([0.001, 0.002], dtype=np.float64)
     bpvar = np.array([0.0008, 0.0015], dtype=np.float64)
-    tpvar = np.array([0.0001, 0.0002], dtype=np.float64)
+    tpq = np.array([0.0001, 0.0002], dtype=np.float64)
+    delta = 1.0 / 288.0
 
-    stats = z_stats(rv, bpvar, tpvar)
+    stats = z_stats(rv, bpvar, tpq, delta)
 
     assert stats.shape == (2,)
     assert stats.dtype == np.float64
@@ -200,9 +201,10 @@ def test_z_stats():
 def test_z_stats_zero_bipower_variance():
     rv = np.array([0.001], dtype=np.float64)
     bpvar = np.array([0.0], dtype=np.float64)
-    tpvar = np.array([0.0001], dtype=np.float64)
+    tpq = np.array([0.0001], dtype=np.float64)
+    delta = 1.0 / 288.0
 
-    stats = z_stats(rv, bpvar, tpvar)
+    stats = z_stats(rv, bpvar, tpq, delta)
 
     # Should handle gracefully without division by zero
     assert np.isfinite(stats[0])
@@ -211,14 +213,28 @@ def test_z_stats_zero_bipower_variance():
 def test_z_stats_manual_comparison():
     rv = np.array([0.01], dtype=np.float64)
     bpvar = np.array([0.008], dtype=np.float64)
-    tpvar = np.array([0.0001], dtype=np.float64)
+    tpq = np.array([0.0001], dtype=np.float64)
+    delta = 1.0 / 288.0
 
-    stats = z_stats(rv, bpvar, tpvar)
+    stats = z_stats(rv, bpvar, tpq, delta)
 
     # Manual calculation NPY_PI
     const_term = (np.pi**2) / 4 + np.pi - 5
-    max_func = max(1.0, tpvar[0] / bpvar[0]**2)
+    max_func = max(1.0, tpq[0] / bpvar[0]**2)
     expected = (rv[0] - bpvar[0]) / (rv[0] * np.sqrt(const_term * max_func))
+    expected = expected / np.sqrt(delta)
 
     np.testing.assert_allclose(stats[0], expected, rtol=1e-10)
 
+
+def test_z_stats_high_jump():
+    # Simulate a clear jump: RV much larger than BPV
+    rv = np.array([0.01], dtype=np.float64)
+    bpvar = np.array([0.001], dtype=np.float64)
+    tpq = np.array([0.00001], dtype=np.float64)
+    delta = 1.0 / 288.0
+
+    stats = z_stats(rv, bpvar, tpq, delta)
+
+    # Should produce a large positive Z-statistic
+    assert stats[0] > 1.0

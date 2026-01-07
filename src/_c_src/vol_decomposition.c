@@ -273,14 +273,21 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
     PyArrayObject *bipower_variance = NULL;
     PyArrayObject *tripower_quarticity = NULL;
     PyArrayObject *output = NULL;
+    double delta;
 
     if (!PyArg_ParseTuple(
-        args, "O!O!O!",
+        args, "O!O!O!d",
         &PyArray_Type, &realised_variance_obj,
         &PyArray_Type, &bipower_variance_obj,
-        &PyArray_Type, &tripower_quarticity_obj
+        &PyArray_Type, &tripower_quarticity_obj,
+        &delta
     )) {
         return NULL;
+    }
+
+    if (delta <= 0.0) {
+        PyErr_SetString(PyExc_ValueError, "delta must be positive");
+        return 0;
     }
 
     realised_variance = (PyArrayObject*) PyArray_FROM_OTF(
@@ -366,8 +373,9 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
         }
 
         if (rv_arr[i] > 0.0) {
-            out_arr[i] = (rv_arr[i] - bpv_arr[i])
-                       / (rv_arr[i] * sqrt(const_term * max_func));
+            out_arr[i] = ((rv_arr[i] - bpv_arr[i])
+                       / (rv_arr[i] * sqrt(const_term * max_func)))
+                       / sqrt(delta);
         }
         else {
             out_arr[i] = 0.0;
