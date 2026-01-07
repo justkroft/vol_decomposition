@@ -22,6 +22,54 @@ typedef struct {
 } VarInputs;
 
 
+static int array_has_nan_or_inf(PyArrayObject* arr, const char* name) {
+    const npy_intp n = PyArray_SIZE(arr);
+    double* data = (double*) PyArray_DATA(arr);
+
+    for (npy_intp i = 0; i < n; i++) {
+        if (!npy_isfinite(data[i])) {
+            PyErr_Format(
+                PyExc_ValueError,
+                "%s contains NaN or Inf at index %ld",
+                name, (long)i
+            );
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
+// Helper function to validate day_indices are within bounds
+static int invalid_day_indices(
+    PyArrayObject* day_indices,
+    npy_intp n_days
+) {
+    npy_intp n = PyArray_SIZE(day_indices);
+    int64_t* data = (int64_t*) PyArray_DATA(day_indices);
+    
+    for (npy_intp i = 0; i < n; i++) {
+        if (data[i] < 0) {
+            PyErr_Format(
+                PyExc_IndexError,
+                "day_indices[%ld] = %ld is negative",
+                (long)i, (long)data[i]
+            );
+            return 1;
+        }
+        if (data[i] >= n_days) {
+            PyErr_Format(
+                PyExc_IndexError,
+                "day_indices[%ld] = %ld is out of bounds (n_days = %ld)",
+                (long)i, (long)data[i], (long)n_days
+            );
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
 static int prepare_var_inputs(PyObject* args, VarInputs* in) {
     PyObject* returns_obj = NULL;
     PyObject* day_indices_obj = NULL;
@@ -60,6 +108,12 @@ static int prepare_var_inputs(PyObject* args, VarInputs* in) {
         in->returns = NULL;
         return 0;
     }
+    if (invalid_day_indices(in->day_indices, in->n_days)) {
+        Py_DECREF(in->returns);
+        Py_DECREF(in->day_indices);
+        in->returns = in->day_indices = NULL;
+        return 0;
+    }
 
     // validate dimensions
     if (PyArray_NDIM(in->returns) != 1 ||
@@ -87,6 +141,33 @@ static int prepare_var_inputs(PyObject* args, VarInputs* in) {
         return 0;
     }
 
+    // validate array is not empty
+    if (in->n == 0) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "returns and day_indices must not be empty"
+        );
+        Py_DECREF(in->returns);
+        Py_DECREF(in->day_indices);
+        in->returns = in->day_indices = NULL;
+        return 0;
+    }
+
+    // check for nan/inf
+    if (array_has_nan_or_inf(in->returns, "returns")) {
+        Py_DECREF(in->returns);
+        Py_DECREF(in->day_indices);
+        in->returns = in->day_indices = NULL;
+        return 0;
+    }
+
+    if (array_has_nan_or_inf(in->day_indices, "day_indices")) {
+        Py_DECREF(in->returns);
+        Py_DECREF(in->day_indices);
+        in->returns = in->day_indices = NULL;
+        return 0;
+    }
+
     // create output array
     const npy_intp dims[1] = { in->n_days };
     in->output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
@@ -101,7 +182,7 @@ static int prepare_var_inputs(PyObject* args, VarInputs* in) {
 }
 
 
-static int prepar_var_inputs_with_delta(PyObject* args, VarInputs* in, double* delta) {
+static int prepare_var_inputs_with_delta(PyObject* args, VarInputs* in, double* delta) {
     PyObject* returns_obj = NULL;
     PyObject* day_indices_obj = NULL;
 
@@ -157,13 +238,6 @@ static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
     // do actual computation
     for (npy_intp i = 0; i < in.n; i++) {
         int64_t day_idx = day_arr[i];
-
-        if (day_idx < 0) {
-            PyErr_SetString(PyExc_IndexError, "day_indices contains out-of-bounds value (< 0)");
-            free_var_inputs(&in);
-            return NULL;
-        }
-
         double r = ret_arr[i];
         out_arr[day_idx] += r * r;
     }
@@ -181,6 +255,15 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
         return NULL;
     }
 
+    if (in.n < 2) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "bipower variance requires at least 2 observations"
+        );
+        free_var_inputs(&in);
+        return NULL;
+    }
+
     double* ret_arr = (double*) PyArray_DATA(in.returns);
     int64_t* day_arr = (int64_t*) PyArray_DATA(in.day_indices);
     double* out_arr = (double*) PyArray_DATA(in.output);
@@ -188,16 +271,6 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
     for (npy_intp i = 1; i < in.n; i++) {
         if (day_arr[i] == day_arr[i-1]) {
             int64_t day_idx = day_arr[i];
-
-            if (day_idx < 0) {
-                PyErr_SetString(
-                    PyExc_IndexError,
-                    "day_indices contains out-of-bounds value (< 0)"
-                );
-                free_var_inputs(&in);
-                return NULL;
-            }
-
             out_arr[day_idx] += fabs(ret_arr[i-1]) * fabs(ret_arr[i]);
         }
     }
@@ -207,7 +280,7 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
     const double mu_1_inv_sq = 1.0 / (mu_1 * mu_1);
 
     // scale by mu_1^(-2)
-    for (int i = 0; i < in.n_days; i++) {
+    for (npy_intp i = 0; i < in.n_days; i++) {
         out_arr[i] *= mu_1_inv_sq;
     }
 
@@ -222,7 +295,16 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
     VarInputs in;;
     double delta;
 
-    if (!prepar_var_inputs_with_delta(args, &in, &delta)) {
+    if (!prepare_var_inputs_with_delta(args, &in, &delta)) {
+        return NULL;
+    }
+
+    if (in.n < 3) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "tripower quarticity requires at least 3 observations"
+        );
+        free_var_inputs(&in);
         return NULL;
     }
 
@@ -235,14 +317,6 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
     for (npy_intp i = 2; i < in.n; i++) {
         if (day_arr[i] == day_arr[i-1] && day_arr[i-1] == day_arr[i-2]) {
             int64_t day_idx = day_arr[i];
-
-            if (day_idx < 0) {
-                PyErr_SetString(PyExc_IndexError, 
-                    "day_indices contains out-of-bounds value (< 0)");
-                free_var_inputs(&in);
-                return NULL;
-            }
-
             double val = pow(fabs(ret_arr[i-2]), exponent)
                        * pow(fabs(ret_arr[i-1]), exponent)
                        * pow(fabs(ret_arr[i]), exponent);
@@ -254,7 +328,7 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
     const double mu_43 = mu_func(4.0 / 3.0);
     const double scale = delta * mu_43 * mu_43 * mu_43;
 
-    for (int i = 0; i < in.n_days; i++) {
+    for (npy_intp i = 0; i < in.n_days; i++) {
         out_arr[i] /= scale;
     }
 
@@ -287,7 +361,12 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
 
     if (delta <= 0.0) {
         PyErr_SetString(PyExc_ValueError, "delta must be positive");
-        return 0;
+        return NULL;
+    }
+
+    if (!npy_isfinite(delta)) {
+        PyErr_SetString(PyExc_ValueError, "delta must be finite");
+        return NULL;
     }
 
     realised_variance = (PyArrayObject*) PyArray_FROM_OTF(
@@ -330,6 +409,14 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
     }
 
     const npy_intp n = PyArray_SIZE(realised_variance);
+
+    if (n == 0) {
+        PyErr_SetString(PyExc_ValueError, "input arrays must not be empty");
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(tripower_quarticity);
+        return NULL;
+    }
     
     if (
         PyArray_SIZE(bipower_variance) != n
@@ -339,6 +426,25 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
             PyExc_ValueError,
             "all input arrays must have the same length"
         );
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(tripower_quarticity);
+        return NULL;
+    }
+
+    if (array_has_nan_or_inf(realised_variance, "realised_variance")) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(tripower_quarticity);
+        return NULL;
+    }
+    if (array_has_nan_or_inf(bipower_variance, "bipower_variance")) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(tripower_quarticity);
+        return NULL;
+    }
+    if (array_has_nan_or_inf(tripower_quarticity, "tripower_quarticity")) {
         Py_DECREF(realised_variance);
         Py_DECREF(bipower_variance);
         Py_DECREF(tripower_quarticity);
@@ -389,7 +495,7 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
 }
 
 
-// apply jumpy filter; compute continous and jumpy component
+// apply jumpy filter; compute continous and jump component
 static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
     PyObject *realised_variance_obj = NULL;
     PyObject *bipower_variance_obj = NULL;
@@ -414,6 +520,11 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
 
     if (sig_threshold <= 0.0) {
         PyErr_SetString(PyExc_ValueError, "sig_threshold must be greater than 0");
+        return NULL;
+    }
+
+    if (!npy_isfinite(sig_threshold)) {
+        PyErr_SetString(PyExc_ValueError, "sig_threshold must be finite");
         return NULL;
     }
 
@@ -458,6 +569,14 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
 
     const npy_intp n = PyArray_SIZE(realised_variance);
 
+    if (n == 0) {
+        PyErr_SetString(PyExc_ValueError, "input arrays must not be empty");
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(z_stats);
+        return NULL;
+    }
+
     if (
         PyArray_SIZE(bipower_variance) != n
         || PyArray_SIZE(z_stats) != n
@@ -472,6 +591,25 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
         return NULL;
     }
 
+    if (array_has_nan_or_inf(realised_variance, "realised_variance")) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(z_stats);
+        return NULL;
+    }
+    if (array_has_nan_or_inf(bipower_variance, "bipower_variance")) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(z_stats);
+        return NULL;
+    }
+    if (array_has_nan_or_inf(z_stats, "z_stats")) {
+        Py_DECREF(realised_variance);
+        Py_DECREF(bipower_variance);
+        Py_DECREF(z_stats);
+        return NULL;
+    }
+
     npy_intp dims[1] = {n};
     cont_out = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
     jump_out = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
@@ -480,6 +618,11 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
         Py_DECREF(realised_variance);
         Py_DECREF(bipower_variance);
         Py_DECREF(z_stats);
+
+        // Clean up output arrays (might be NULL, might not be)
+        // Use Py_XDECREF which safely handles NULL pointers
+        Py_XDECREF(cont_out);
+        Py_XDECREF(jump_out);
         return NULL;
     }
 
@@ -506,7 +649,13 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
         cont_arr[i] = rv_arr[i] - jump_arr[i];
     }
 
-    return Py_BuildValue("(OO)", cont_out, jump_out);
+    PyObject* result = Py_BuildValue("(OO)", cont_out, jump_out);
+    Py_DECREF(realised_variance);
+    Py_DECREF(bipower_variance);
+    Py_DECREF(z_stats);
+    Py_DECREF(cont_out);  // Py_BuildValue increases refcount
+    Py_DECREF(jump_out);
+    return result;
 }
 
 
