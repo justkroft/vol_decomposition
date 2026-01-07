@@ -100,6 +100,39 @@ static int prepare_var_inputs(PyObject* args, VarInputs* in) {
 }
 
 
+static int prepar_var_inputs_with_delta(PyObject* args, VarInputs* in, double* delta) {
+    PyObject* returns_obj = NULL;
+    PyObject* day_indices_obj = NULL;
+
+    // Parse all arguments first
+    if (!PyArg_ParseTuple(
+        args, "O!O!nd",
+        &PyArray_Type, &returns_obj,
+        &PyArray_Type, &day_indices_obj,
+        &in->n_days,
+        delta
+    )) {
+        return 0;
+    }
+
+    // validate delta
+    if (*delta <= 0.0) {
+        PyErr_SetString(PyExc_ValueError, "delta must be positive");
+        return 0;
+    }
+
+    // base args and call base prepare function
+    PyObject* base_args = Py_BuildValue("OOn", returns_obj, day_indices_obj, in->n_days);
+    if (!base_args) {
+        return 0;
+    }
+    int result = prepare_var_inputs(base_args, in);
+    Py_DECREF(base_args);
+
+    return result;
+}
+
+
 // helper function to clean up
 static void free_var_inputs(VarInputs* in) {
     Py_XDECREF(in->returns);
@@ -185,41 +218,30 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
 
 // tri-power variance
 static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
-    PyArrayObject *returns, *day_indices, *output;
-    int n_days;
+    VarInputs in;;
     double delta;
 
-    if (!PyArg_ParseTuple(
-        args, "O!O!id",
-        &PyArray_Type, &returns,
-        &PyArray_Type, &day_indices,
-        &n_days,
-        &delta
-    )) {
+    if (!prepar_var_inputs_with_delta(args, &in, &delta)) {
         return NULL;
     }
 
-    if (n_days <= 0) {
-        PyErr_SetString(PyExc_ValueError, "n_days must be positive");
-        return NULL;
-    }
+    double* ret_arr = (double*) PyArray_DATA(in.returns);
+    int64_t *day_arr = (int64_t*) PyArray_DATA(in.day_indices);
+    double *out_arr = (double*) PyArray_DATA(in.output);
 
-    const npy_intp dims[1] = {n_days};
-    output = (PyArrayObject*) PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
-    if (output == NULL) {
-        return NULL;
-    }
-
-    double* ret_arr = (double*) PyArray_DATA(returns);
-    long *day_arr = (long*) PyArray_DATA(day_indices);
-    double *out_arr = (double*) PyArray_DATA(output);
-
-    const npy_intp n = PyArray_SIZE(returns);
     const double exponent = 4.0 / 3.0;
 
-    for (npy_intp i = 2; i < n; i++) {
+    for (npy_intp i = 2; i < in.n; i++) {
         if (day_arr[i] == day_arr[i-1] && day_arr[i-1] == day_arr[i-2]) {
-            long day_idx = day_arr[i];
+            int64_t day_idx = day_arr[i];
+
+            if (day_idx < 0) {
+                PyErr_SetString(PyExc_IndexError, 
+                    "day_indices contains out-of-bounds value (< 0)");
+                free_var_inputs(&in);
+                return NULL;
+            }
+
             double val = pow(fabs(ret_arr[i-2]), exponent)
                        * pow(fabs(ret_arr[i-1]), exponent)
                        * pow(fabs(ret_arr[i]), exponent);
@@ -229,13 +251,15 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
     
     // compute mu_43^3 and scale
     const double mu_43 = mu_func(4.0 / 3.0);
-
     const double scale = delta * mu_43 * mu_43 * mu_43;
-    for (int i = 0; i < n_days; i++) {
+
+    for (int i = 0; i < in.n_days; i++) {
         out_arr[i] /= scale;
     }
 
-    return (PyObject*) output;
+    Py_DECREF(in.returns);
+    Py_DECREF(in.day_indices);
+    return (PyObject*) in.output;
 }
 
 
