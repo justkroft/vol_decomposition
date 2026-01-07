@@ -10,6 +10,7 @@ except ImportError:
     pytest.skip("C extension not compiled", allow_module_level=True)
 
 from src.vol_decomposition import (
+    apply_jump_filter,
     bipower_variance,
     realised_variance,
     tripower_quarticity,
@@ -43,14 +44,14 @@ def multi_day_indices():
     return np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=np.int64)
 
 
-def test_ealised_variance_simple(simple_returns, simple_day_indices):
+def test_realised_variance_simple(simple_returns, simple_day_indices):
     actual = realised_variance(simple_returns, simple_day_indices, 1)
     expected = np.sum(simple_returns ** 2)
 
     np.testing.assert_allclose(actual[0], expected, rtol=RTOL)
 
 
-def test_ealised_variance_multi_day(
+def test_realised_variance_multi_day(
     multi_day_returns, multi_day_indices
 ):
     actual = realised_variance(multi_day_returns, multi_day_indices, 2)
@@ -238,3 +239,88 @@ def test_z_stats_high_jump():
 
     # Should produce a large positive Z-statistic
     assert stats[0] > 1.0
+
+
+def test_apply_jump_filter():
+    rv = np.array([0.01, 0.02], dtype=np.float64)
+    bpvar = np.array([0.008, 0.019], dtype=np.float64)
+    # First significant, second not
+    stats = np.array([5.0, 1.0], dtype=np.float64)
+    sig_threshold = 3.5
+
+    cont, jump = apply_jump_filter(
+        rv, bpvar, stats, sig_threshold, truncate_zero=1
+    )
+
+    # First observation: jump detected
+    assert cont[0] == 0.008  # Should be BPV
+    assert jump[0] == 0.01 - 0.008  # RV - BPV
+
+    # Second observation: no jump detected
+    assert cont[1] == 0.02  # Should be full RV
+    assert jump[1] == 0.0
+
+
+def test_apply_filter_truncate_zero():
+    rv = np.array([0.005], dtype=np.float64)
+    bpvar = np.array([0.008], dtype=np.float64)  # BPV > RV
+    stats = np.array([5.0], dtype=np.float64)  # Significant
+    sig_threshold = 3.5
+
+    # With truncation
+    cont_trunc, jump_trunc = apply_jump_filter(
+        rv, bpvar,stats, sig_threshold, truncate_zero=1
+    )
+    assert cont_trunc[0] == rv[0]
+    assert jump_trunc[0] == 0.0  # Truncated to zero
+
+    # Without truncation
+    cont_no_trunc, jump_no_trunc = apply_jump_filter(
+        rv, bpvar, stats, sig_threshold, truncate_zero=0
+    )
+    assert jump_no_trunc[0] == rv[0] - bpvar[0]  # Negative value allowed
+    assert jump_no_trunc[0] < 0
+
+
+def test_apply_jump_filter_decomposition_check():
+    rv = np.array([0.01, 0.02, 0.015], dtype=np.float64)
+    bpvar = np.array([0.008, 0.019, 0.010], dtype=np.float64)
+    stats = np.array([5.0, 1.0, 4.0], dtype=np.float64)
+    sig_threshold = 3.5
+
+    cont, jump = apply_jump_filter(
+        rv, bpvar, stats, sig_threshold, truncate_zero=1
+    )
+
+    # RV should equal Jump + Continuous
+    np.testing.assert_allclose(rv, jump + cont, rtol=RTOL)
+
+
+def test_apply_jump_filter_all_insignificant():
+    rv = np.array([0.01, 0.02, 0.015], dtype=np.float64)
+    bpvar = np.array([0.009, 0.019, 0.014], dtype=np.float64)
+    stats = np.array([1.0, 0.5, 2.0], dtype=np.float64)
+    sig_threshold = 3.5
+
+    cont, jump = apply_jump_filter(
+        rv, bpvar, stats, sig_threshold, truncate_zero=1
+    )
+
+    # No jumps should be detected
+    np.testing.assert_array_equal(jump, np.zeros(3))
+    np.testing.assert_array_equal(cont, rv)
+
+def test_apply_jump_filter_all_significant():
+    rv = np.array([0.01, 0.02, 0.015], dtype=np.float64)
+    bpvar = np.array([0.005, 0.010, 0.008], dtype=np.float64)
+    stats = np.array([5.0, 6.0, 4.5], dtype=np.float64)
+    sig_threshold = 3.5
+
+    cont, jump = apply_jump_filter(
+        rv, bpvar, stats, sig_threshold, truncate_zero=1
+    )
+
+    # All should have jumps
+    assert np.all(jump > 0)
+    expected_jump = rv - bpvar
+    np.testing.assert_allclose(jump, expected_jump, rtol=RTOL)

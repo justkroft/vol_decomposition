@@ -146,3 +146,43 @@ def z_stats(
         tripower_quarticity,
         delta
     )
+
+
+def apply_jump_filter(
+    realised_variance: np.ndarray,
+    bipower_variance: np.ndarray,
+    z_stats: np.ndarray,
+    sig_threshold: float,
+    truncate_zero: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Apply the jump filter and separate the realised volatility in a continuous
+    and jump component.
+
+    Parameters
+    ----------
+    realised_variance : np.ndarray
+        1D array of realised variance, must be of dtype float64.
+    bipower_variance : np.ndarray
+        1D array of bi-power variance, must be of dtype float64.
+    z_stats : np.ndarray
+        1D array of associated Z-statistics.
+    sig_threshold : float
+        The significant threshold, must be greater than 0.
+    truncate_zero : int
+        Boolean indicator, truncate negative jumps to zero.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        A tuple of NumPy arrays.
+        The first element is the continuous component of the variance,
+        the second element is the jump component of the variance.
+    """
+    return _c.apply_jump_filter(
+        realised_variance,
+        bipower_variance,
+        z_stats,
+        sig_threshold,
+        truncate_zero
+    )

@@ -412,8 +412,8 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
         return NULL;
     }
 
-    if (sig_threshold <= 0.0 || sig_threshold >= 1) {
-        PyErr_SetString(PyExc_ValueError, "sig_threshold must be between 0 and 1");
+    if (sig_threshold <= 0.0) {
+        PyErr_SetString(PyExc_ValueError, "sig_threshold must be greater than 0");
         return NULL;
     }
 
