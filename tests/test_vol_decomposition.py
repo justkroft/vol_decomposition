@@ -80,6 +80,43 @@ def test_realised_variance_zero_returns():
     assert actual[0] == 0.0
 
 
+def test_realised_variance_empty():
+    with pytest.raises(ValueError, match="must not be empty"):
+        realised_variance(
+            np.array([], dtype=np.float64),
+            np.array([], dtype=np.int64),
+            1
+        )
+
+
+def test_realised_variance_nan():
+    returns = np.array([0.01, np.nan, 0.015], dtype=np.float64)
+    day_indices = np.array([0, 0, 0], dtype=np.int64)
+    with pytest.raises(ValueError, match="contains NaN"):
+        realised_variance(returns, day_indices, 1)
+
+
+def test_realised_variance_inf():
+    returns = np.array([0.01, np.inf, 0.015], dtype=np.float64)
+    day_indices = np.array([0, 0, 0], dtype=np.int64)
+    with pytest.raises(ValueError, match="contains NaN or Inf"):
+        realised_variance(returns, day_indices, 1)
+
+
+def test_realised_variance_out_of_bounds():
+    returns = np.array([0.01, 0.02, 0.015], dtype=np.float64)
+    # 5 is out of bounds
+    day_indices = np.array([0, 0, 5], dtype=np.int64)
+    with pytest.raises(IndexError, match="out of bounds"):
+        realised_variance(returns, day_indices, 2)
+
+
+def test_realised_variance_negative_index():
+    returns = np.array([0.01, 0.02, 0.015], dtype=np.float64)
+    day_indices = np.array([0, -1, 0], dtype=np.int64)
+    with pytest.raises(IndexError, match="negative"):
+        realised_variance(returns, day_indices, 2)
+
 
 def mu_func_testing(p):
     return 2**(p/2) * ss.gamma((p+1) / 2) / ss.gamma(1/2)
@@ -138,6 +175,14 @@ def test_bipower_variance_no_cross_contamination():
     np.testing.assert_allclose(actual[1], expected_day1, rtol=1e-10)
 
 
+def test_bipower_variance_insufficient_data():
+    returns = np.array([0.01], dtype=np.float64)
+    day_indices = np.array([0], dtype=np.int64)
+    with pytest.raises(ValueError, match="at least 2 observations"):
+        bipower_variance(returns, day_indices, 1)
+
+
+
 def test_tripower_quarticity_simple(simple_returns, simple_day_indices):
     mu_43 = mu_func_testing(4.0/3.0)
     delta = 1.0 / 288.0
@@ -183,6 +228,13 @@ def test_tripower_quarticity_no_cross_contamination():
 
     # Day 1: only 2 observations, no triplets
     assert actual[1] == 0.0
+
+
+def test_tripower_quarticity_insufficient_data():
+    returns = np.array([0.01, 0.02], dtype=np.float64)
+    day_indices = np.array([0, 0], dtype=np.int64)
+    with pytest.raises(ValueError, match="at least 3 observations"):
+        tripower_quarticity(returns, day_indices, 1, 1.0/288.0)
 
 
 def test_z_stats():
@@ -239,6 +291,18 @@ def test_z_stats_high_jump():
 
     # Should produce a large positive Z-statistic
     assert stats[0] > 1.0
+
+
+def test_z_stats_invalid_delta():
+    rv = np.array([0.001], dtype=np.float64)
+    bpv = np.array([0.0008], dtype=np.float64)
+    tpq = np.array([0.0001], dtype=np.float64)
+
+    with pytest.raises(ValueError, match="delta must be positive"):
+        z_stats(rv, bpv, tpq, -0.01)
+
+    with pytest.raises(ValueError, match="delta must be finite"):
+        z_stats(rv, bpv, tpq, np.inf)
 
 
 def test_apply_jump_filter():
@@ -324,3 +388,18 @@ def test_apply_jump_filter_all_significant():
     assert np.all(jump > 0)
     expected_jump = rv - bpvar
     np.testing.assert_allclose(jump, expected_jump, rtol=RTOL)
+
+
+def test_apply_jump_filter_invalid_threshold():
+    rv = np.array([0.01], dtype=np.float64)
+    bpv = np.array([0.008], dtype=np.float64)
+    stats = np.array([5.0], dtype=np.float64)
+
+    with pytest.raises(
+        ValueError,
+        match="sig_threshold must be greater than 0"
+    ):
+        apply_jump_filter(rv, bpv, stats, -1.0, 1)
+
+    with pytest.raises(ValueError, match="sig_threshold must be finite"):
+        apply_jump_filter(rv, bpv, stats, np.nan, 1)
