@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.4.0",
+    "pandas>=2.3.3",
     "scipy>=1.16.3",
     "setuptools>=80.9.0",
 ]
