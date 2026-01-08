@@ -47,7 +47,7 @@ static int invalid_day_indices(
 ) {
     npy_intp n = PyArray_SIZE(day_indices);
     int64_t* data = (int64_t*) PyArray_DATA(day_indices);
-    
+
     for (npy_intp i = 0; i < n; i++) {
         if (data[i] < 0) {
             PyErr_Format(
@@ -235,12 +235,18 @@ static PyObject* compute_realised_variance(PyObject* self, PyObject* args) {
     int64_t* day_arr = (int64_t*) PyArray_DATA(in.day_indices);
     double* out_arr = (double*) PyArray_DATA(in.output);
 
+    // can't access struct members without GIL
+    // hence store local variable
+    const npy_intp n = in.n;
+
     // do actual computation
-    for (npy_intp i = 0; i < in.n; i++) {
+    Py_BEGIN_ALLOW_THREADS
+    for (npy_intp i = 0; i < n; i++) {
         int64_t day_idx = day_arr[i];
         double r = ret_arr[i];
         out_arr[day_idx] += r * r;
     }
+    Py_END_ALLOW_THREADS
 
     Py_DECREF(in.returns);
     Py_DECREF(in.day_indices);
@@ -268,21 +274,26 @@ static PyObject* compute_bipower_variance(PyObject* self, PyObject* args) {
     int64_t* day_arr = (int64_t*) PyArray_DATA(in.day_indices);
     double* out_arr = (double*) PyArray_DATA(in.output);
 
-    for (npy_intp i = 1; i < in.n; i++) {
+    const npy_intp n = in.n;
+    const npy_intp n_days = in.n_days;
+
+    // compute mu_1^(-2)
+    const double mu_1 = mu_func(1.0);
+    const double mu_1_inv_sq = 1.0 / (mu_1 * mu_1);
+
+    Py_BEGIN_ALLOW_THREADS
+    for (npy_intp i = 1; i < n; i++) {
         if (day_arr[i] == day_arr[i-1]) {
             int64_t day_idx = day_arr[i];
             out_arr[day_idx] += fabs(ret_arr[i-1]) * fabs(ret_arr[i]);
         }
     }
 
-    // compute mu_1^(-2)
-    const double mu_1 = mu_func(1.0);
-    const double mu_1_inv_sq = 1.0 / (mu_1 * mu_1);
-
     // scale by mu_1^(-2)
-    for (npy_intp i = 0; i < in.n_days; i++) {
+    for (npy_intp i = 0; i < n_days; i++) {
         out_arr[i] *= mu_1_inv_sq;
     }
+    Py_END_ALLOW_THREADS
 
     Py_DECREF(in.returns);
     Py_DECREF(in.day_indices);
@@ -312,25 +323,29 @@ static PyObject* compute_tripower_quarticity(PyObject* self, PyObject* args) {
     int64_t* day_arr = (int64_t*) PyArray_DATA(in.day_indices);
     double* out_arr = (double*) PyArray_DATA(in.output);
 
+    const npy_intp n = in.n;
+    const npy_intp n_days = in.n_days;
     const double exponent = 4.0 / 3.0;
 
-    for (npy_intp i = 2; i < in.n; i++) {
+    // compute mu_43^3 and scale
+    const double mu_43 = mu_func(4.0 / 3.0);
+    const double scale = delta * mu_43 * mu_43 * mu_43;
+
+    Py_BEGIN_ALLOW_THREADS
+    for (npy_intp i = 2; i < n; i++) {
         if (day_arr[i] == day_arr[i-1] && day_arr[i-1] == day_arr[i-2]) {
             int64_t day_idx = day_arr[i];
             double val = pow(fabs(ret_arr[i-2]), exponent)
                        * pow(fabs(ret_arr[i-1]), exponent)
                        * pow(fabs(ret_arr[i]), exponent);
-            out_arr[day_idx] += val; 
+            out_arr[day_idx] += val;
         }
     }
-    
-    // compute mu_43^3 and scale
-    const double mu_43 = mu_func(4.0 / 3.0);
-    const double scale = delta * mu_43 * mu_43 * mu_43;
 
-    for (npy_intp i = 0; i < in.n_days; i++) {
+    for (npy_intp i = 0; i < n_days; i++) {
         out_arr[i] /= scale;
     }
+    Py_END_ALLOW_THREADS
 
     Py_DECREF(in.returns);
     Py_DECREF(in.day_indices);
@@ -417,7 +432,7 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
         Py_DECREF(tripower_quarticity);
         return NULL;
     }
-    
+
     if (
         PyArray_SIZE(bipower_variance) != n
         || PyArray_SIZE(tripower_quarticity) != n
@@ -467,6 +482,7 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
 
     const double const_term = (NPY_PI * NPY_PI) / 4 + NPY_PI - 5;
 
+    Py_BEGIN_ALLOW_THREADS
     for (npy_intp i = 0; i < n; i++) {
         double max_func;
         double ratio;
@@ -487,6 +503,7 @@ static PyObject* compute_z_stats(PyObject* self, PyObject* args) {
             out_arr[i] = 0.0;
         }
     }
+    Py_END_ALLOW_THREADS
 
     Py_DECREF(realised_variance);
     Py_DECREF(bipower_variance);
@@ -632,6 +649,7 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
     double* cont_arr = (double*) PyArray_DATA(cont_out);
     double* jump_arr = (double*) PyArray_DATA(jump_out);
 
+    Py_BEGIN_ALLOW_THREADS
     for (npy_intp i = 0; i < n; i++) {
         double raw_jump = rv_arr[i] - bpv_arr[i];
 
@@ -648,6 +666,7 @@ static PyObject* apply_jump_filter(PyObject* self, PyObject* args) {
 
         cont_arr[i] = rv_arr[i] - jump_arr[i];
     }
+    Py_END_ALLOW_THREADS
 
     PyObject* result = Py_BuildValue("(OO)", cont_out, jump_out);
     Py_DECREF(realised_variance);
@@ -664,13 +683,13 @@ static PyMethodDef VolDecompMethods[] = {
     {
         "compute_realised_variance",
         compute_realised_variance,
-        METH_VARARGS, 
+        METH_VARARGS,
         "Compute realised variance"
     },
     {
         "compute_bipower_variance",
         compute_bipower_variance,
-        METH_VARARGS, 
+        METH_VARARGS,
         "Compute bi-power variance"
     },
     {
