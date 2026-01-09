@@ -40,13 +40,13 @@ where $\mu_{1} = \sqrt{2/\pi}$. $BV$ converges to $C$ as $\delta$ goes to zero. 
 The jump component, $J$, is then computed as the difference between $RV$ and $BV$, and additionally imposed with a non-negativity constraint [[2]](#2):
 
 $$
-	J_{t+1} = \text{max}\{RV_{t+1}(\delta) - BV_{t+1}(\delta), 0 \} \cdot 1_{ \{ Z_{t+1}>\phi_{1-\alpha} \} },
+	J_{t+1} = \text{max}(RV_{t+1}(\delta) - BV_{t+1}(\delta), 0 ) \cdot 1_{ ( Z_{t+1}>\phi_{1-\alpha} ) },
 $$
 
-where $1_{ \{ Z_{t}>\phi_{1-\alpha} \} }$ is an indicator function equal to 1 if the jump is significant, and 0 otherwise. $\phi_{\alpha}$ is the $\alpha$ quantile of the Gaussian distribution. The $Z$-statistic is defined as [[6]](#6), [[7]](#7):
+where $1_{( Z_{t}>\phi_{1-\alpha} ) }$ is an indicator function equal to 1 if the jump is significant, and 0 otherwise. $\phi_{\alpha}$ is the $\alpha$ quantile of the Gaussian distribution. The $Z$-statistic is defined as [[6]](#6), [[7]](#7):
 
 $$
-	Z_{t+1}(\delta) = \frac{ \{RV_{t+1}(\delta) - BV_{t+1}(\delta)\} RV_{t+1}(\delta)^{-1} }{ \sqrt{ ( (\mu_{1}^{-4} + 2\mu_{1}^{-2} - 5) \cdot \text{max}\{1,TQ_{t+1}(\delta) BV_{t+1}^{-2}(\delta) \} ) } },
+	Z_{t+1}(\delta) = \frac{ (RV_{t+1}(\delta) - BV_{t+1}(\delta)) RV_{t+1}(\delta)^{-1} }{ \sqrt{ ( (\mu_{1}^{-4} + 2\mu_{1}^{-2} - 5) \cdot \text{max}(1,TQ_{t+1}(\delta) BV_{t+1}^{-2}(\delta) ) ) } },
 $$
 
  where $TQ_{t+1}(\delta)$ refers to Tri-Power Quarticity:
@@ -68,7 +68,7 @@ $$
 The observations should cover non-overlapping periods. Thus, for the components described above ($RV$, $C$, and $J$), once can compute the $k$-day realised observation with the general formula below, using $k=22$ for monthly measures [[2]](#2). Note that, under stationarity, we have $\mathbb{E}\left[RV_{t,t+k}\right] = 252 \cdot \mathbb{E}\left[RV_{t+1}\right]$. In this process, we assume that the underlying series are not autocorrelated.
 
 $$
-	\hat{x}_{t} = 252\cdot k^{-1} \{ \hat{x}_{t+1} + \ldots + \hat{x}_{t+k} \}
+	\hat{x}_{t} = 252\cdot k^{-1} ( \hat{x}_{t+1} + \ldots + \hat{x}_{t+k} )
 $$
 
 # References
