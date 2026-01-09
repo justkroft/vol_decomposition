@@ -1,0 +1,1 @@
+from src.decomposition_pipeline import VarianceDecomposition
