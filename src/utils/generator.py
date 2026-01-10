@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-def generate_jump_diffision_process(
+def generate_jump_diffusion_process(
     X0: float = np.log(100.),
     start_date: str = "2010-01-02",
     end_date: str = "2025-12-31",
