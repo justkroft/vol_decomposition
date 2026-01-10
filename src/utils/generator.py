@@ -56,9 +56,9 @@ def generate_jump_diffusion_process(
     """
     np.random.seed(42)
 
-    market_open_hour: int = 9,
-    market_open_minute: int = 30,
-    market_close_hour: int = 16,
+    market_open_hour: int = 9
+    market_open_minute: int = 30
+    market_close_hour: int = 16
     market_close_minute: int = 0
     intervals_per_day = (6 * 60 + 30) / intraday_freq
     intervals_per_year = 252 * intervals_per_day
@@ -141,4 +141,4 @@ def generate_jump_diffusion_process(
     })
     df['log_return'] = df['log_price'].diff()
 
-    return df[["timestamp", "log_return"]]
+    return df[["timestamp", "log_return"]].dropna()

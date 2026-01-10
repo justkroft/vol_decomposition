@@ -7,7 +7,7 @@ import scipy.stats as st
 
 plt.rc('font', **{'family': 'serif', 'serif': ['Times']})
 plt.rc('text', usetex=True)
-mpl.rcParams['text.latex.preamble'] = [r'\usepackage{newtxmath}']
+mpl.rcParams['text.latex.preamble'] = r'\usepackage{newtxmath}'
 
 
 def plot_overview(
