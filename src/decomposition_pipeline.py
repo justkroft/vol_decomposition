@@ -210,7 +210,7 @@ class VarianceDecomposition:
             ) from e
 
         sort_idx = dates.argsort()
-        returns = returns[sort_idx]
+        returns = returns[sort_idx].astype(np.float64)
         dates = dates.iloc[sort_idx].dt.date
 
         day_indices, unique_dates = pd.factorize(dates, sort=True)
