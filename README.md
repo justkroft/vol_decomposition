@@ -94,7 +94,33 @@ Nolte, I., & Xu, Q. (2015). The economic value of volatility timing with realize
 Huang, X., & Tauchen, G. (2005). The relative contribution of jumps to total price variance. *Journal of Financial Econometrics, 3*(4), 456–499.
 
 # Getting Started
-...
+Clone the repository
+```bash
+git clone https://github.com/justkroft/vol_decomposition.git
+cd vol_decomposition
+```
+
+and setup your virtual environment using `uv`.
+
+```bash
+uv venv  # create environment
+uv sync  # sync all dependencies from toml file
+```
+
+Then, activate the environment:
+
+```bash
+source .venv/bin/activate  # on Mac
+./venv/Scripts/activate    # on Windows
+```
+
+Once the environment is setup and all the dependencies are installed, compile the C-extenstions in your terminal:
+
+```bash
+python setup.py build_ext --inplace
+```
+
+Please take a look at [the example notebook](example.ipynb) for an example of how to use the code, including generating fake data for testing, as well as plotting the results.
 
 # License
 [MIT](LICENSE) License © 2026-PRESENT [justkroft](https://github.com/justkroft)
