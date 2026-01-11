@@ -52,7 +52,7 @@ $$
  where $TQ_{t+1}(\delta)$ refers to Tri-Power Quarticity:
 
 $$
- 	TQ_{t+1}(\delta) = \mu_{4/3}^{-3} \cdot \delta^{-1} \cdot \sum\limits_{j=2}^{1/\delta} |{r_{t+j,\delta}}^{4/3}| |{r_{t+(j-1),\delta}}^{4/3} |{r_{t+(j-2),\delta}}^{4/3}|,
+ 	TQ_{t+1}(\delta) = \mu_{4/3}^{-3} \cdot \delta^{-1} \cdot \sum\limits_{j=2}^{1/\delta} |{r_{t+j,\delta}}^{4/3}| |{r_{t+(j-1),\delta}}^{4/3}| |{r_{t+(j-2),\delta}}^{4/3}|,
 $$
 
 where $\mu_{p} = \pi^{-1/2}2^{p/2}\Gamma \Big(\frac{p+1}{2}\Big)$, and $\Gamma (z)$ is the gamma function. The suggested significance level for the jump test is $\alpha = .0001$ to construct the $J$ and $C$ time series.
