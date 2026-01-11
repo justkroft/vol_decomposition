@@ -82,7 +82,7 @@ class VarianceDecomposition:
         self.delta = delta
         self._results: pd.DataFrame | None = None
 
-    def decompose(self) -> pd.DataFrame:
+    def decompose(self) -> None:
         """
         Decompose realized variance into continuous and jump components.
 
@@ -179,8 +179,6 @@ class VarianceDecomposition:
         # cache for property access
         self._results = results
 
-        return results
-
     def _transform_data(self) -> _TransformOutput:
         """
         Transform input DataFrame to arrays suitable for C extension.
@@ -223,6 +221,11 @@ class VarianceDecomposition:
             n_days=n_days,
             unique_dates=pd.Index(unique_dates)
         )
+
+    @property
+    def result(self) -> pd.DataFrame:
+        """Get the results"""
+        return self._results
 
     @property
     def jump_days(self) -> pd.DataFrame:
