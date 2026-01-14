@@ -65,7 +65,7 @@ $$
 $$
 
 ## Step 5: Finalisation
-The observations should cover non-overlapping periods. Thus, for the components described above ($RV$, $C$, and $J$), once can compute the $k$-day realised observation with the general formula below, using $k=22$ for monthly measures [[2]](#2). Note that, under stationarity, we have $\mathbb{E}\left[RV_{t,t+k}\right] = 252 \cdot \mathbb{E}\left[RV_{t+1}\right]$. In this process, we assume that the underlying series are not autocorrelated.
+The observations should cover non-overlapping periods. Thus, for the components described above ($RV$, $C$, and $J$), one can compute the $k$-day realised observation with the general formula below, using $k=22$ for monthly measures [[2]](#2). Note that, under stationarity, we have $\mathbb{E}\left[RV_{t,t+k}\right] = 252 \cdot \mathbb{E}\left[RV_{t+1}\right]$. In this process, we assume that the underlying series are not autocorrelated.
 
 $$
 	\hat{x}_{t} = 252\cdot k^{-1} ( \hat{x}_{t+1} + \ldots + \hat{x}_{t+k} )
