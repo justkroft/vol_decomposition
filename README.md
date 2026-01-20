@@ -122,7 +122,7 @@ source .venv/bin/activate  # on Mac
 ./venv/Scripts/activate    # on Windows
 ```
 
-Once the environment is setup and all the dependencies are installed, compile the C-extenstions in your terminal:
+Once the environment is setup and all the dependencies are installed, compile the C-extensions in your terminal:
 
 ```bash
 python setup.py build_ext --inplace
