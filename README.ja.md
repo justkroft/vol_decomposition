@@ -1,3 +1,6 @@
+[![English](https://img.shields.io/badge/English-blue)](./README.md)
+[![日本語](https://img.shields.io/badge/日本語-red)](./README.ja.md)
+
 # ボラティリティ分解
 
 本コードは、金融・投資修士課程の卒業論文で用いられるアルゴリズムを示している。計算速度の最適化のため、計算負荷の高い部分はCで実装され、Pythonラッパーから呼び出す構成となっている。最終的なコードは、使用しやすい形で一貫したパイプラインとして統合されている
