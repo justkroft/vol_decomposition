@@ -1,3 +1,11 @@
+
+<!-- Language switcher badges -->
+
+[![English](https://img.shields.io/badge/English-blue)](./README.md)
+[![日本語](https://img.shields.io/badge/日本語-red)](./README.ja.md)
+
+
+
 # Volatility Decomposition
 
 This repository contains code written for a part of my Master's degree in Finance \& Investments. This code represents an algorithm used for my thesis where realised variance, computed from intra-day logarithmic returns, is decomposed into a continuous and jump component.
