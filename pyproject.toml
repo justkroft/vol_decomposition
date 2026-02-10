@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=80.9.0", "numpy>=2.4.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "vol-decomposition"
 version = "0.1.0"
@@ -12,6 +16,9 @@ dependencies = [
     "scipy>=1.16.3",
     "setuptools>=80.9.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff"]
 
 [dependency-groups]
 dev = [
