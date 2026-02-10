@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=80.9.0", "numpy>=2.4.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "vol-decomposition"
 version = "0.1.0"
