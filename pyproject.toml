@@ -13,6 +13,9 @@ dependencies = [
     "setuptools>=80.9.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff"]
+
 [dependency-groups]
 dev = [
     "pre-commit>=4.0.1,<5",
