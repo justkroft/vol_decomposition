@@ -17,4 +17,8 @@ target_compile_options(_vol_decomposition_c PRIVATE
     $<$<NOT:$<C_COMPILER_ID:MSVC>>:-O3>
 )
 
+set_target_properties(_vol_decomposition_c PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/src
+)
+
 install(TARGETS _vol_decomposition_c DESTINATION src)
