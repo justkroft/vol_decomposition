@@ -102,6 +102,8 @@ Nolte, I., & Xu, Q. (2015). The economic value of volatility timing with realize
 Huang, X., & Tauchen, G. (2005). The relative contribution of jumps to total price variance. *Journal of Financial Econometrics, 3*(4), 456–499.
 
 # Getting Started
+*Prerequisites — you need CMake and a C compiler installed on your machine.*
+
 Clone the repository
 ```bash
 git clone https://github.com/justkroft/vol_decomposition.git
@@ -122,10 +124,10 @@ source .venv/bin/activate  # on Mac
 ./venv/Scripts/activate    # on Windows
 ```
 
-Once the environment is setup and all the dependencies are installed, compile the C-extensions in your terminal:
+Once the environment is setup and all the dependencies are installed, you can create a local, editable install:
 
 ```bash
-python setup.py build_ext --inplace
+uv pip install --no-build-isolation -e .
 ```
 
 Please take a look at [the example notebook](example.ipynb) for an example of how to use the code, including generating fake data for testing, as well as plotting the results.
