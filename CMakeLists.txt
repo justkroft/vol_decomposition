@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.22)
 project(vol_decomposition C)
 
 find_package(Python 3.13 REQUIRED COMPONENTS Interpreter Development.Module NumPy)
