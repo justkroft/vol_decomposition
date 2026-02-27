@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core", "numpy>=2.4.0"]
+requires = ["scikit-build-core", "numpy>=2.0.0,<2.2.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -9,10 +9,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "matplotlib>=3.10.8",
-    "numpy>=2.4.0",
-    "pandas>=2.3.3",
-    "scipy>=1.16.3",
+    "matplotlib>=3.10.0",
+    "numpy>=2.0.0,<2.2.0",
+    "pandas>=2.0.0",
+    "scipy>=1.10.0",
 ]
 
 [project.optional-dependencies]
@@ -24,11 +24,12 @@ dev = [
     "pre-commit-hooks>=4.6.0,<5",
     "pytest>=9.0.2",
     "ruff>=0.14.10",
-    "scikit-build-core>=0.11.6",
+    "scikit-build-core>=0.12.1",
 ]
 
 [tool.scikit-build]
 wheel.packages = ["src"]
+cmake.define = { Python_EXECUTABLE = "{sys.executable}" }
 
 [tool.ruff]
 # Set the maximum line length to 79.
@@ -44,6 +45,7 @@ select = [
     "BLE", # blind-except
     "E",   # pycodestyle errors
     "F",   # pyflakes
+    "F403", # Ignore C extension imports that can't be found
     "I",   # sort imports
     "RET", # flake8-return
     "UP",  # pyupgrade

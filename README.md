@@ -130,6 +130,13 @@ Once the environment is setup and all the dependencies are installed, you can cr
 uv pip install --no-build-isolation -e .
 ```
 
+Or if `make` is available on your platform:
+
+```bash
+make install
+make build
+```
+
 Please take a look at [the example notebook](example.ipynb) for an example of how to use the code, including generating fake data for testing, as well as plotting the results.
 
 # License
